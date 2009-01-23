@@ -1,0 +1,138 @@
+#!/usr/bin/env python
+# cli wrapper/scrobbler for mplayer
+# by rupa@lrrr.us 
+#
+# aptitude install mplayer python-mutagen lastfmsubmitd
+# add self to lastfm group
+
+import locale, os, readline, select, sys, time
+from optparse import OptionParser
+from subprocess import Popen, PIPE
+
+from mutagen.mp3 import MP3
+from mutagen.easyid3 import EasyID3
+
+import lastfm
+import lastfm.client
+import lastfm.marshaller
+
+class Player(object):
+
+    def __init__(self, tune, quiet=False, scrobble=True):
+        self.quiet = quiet
+        self.scrobble = scrobble
+        playing = self.mplay(tune)
+        if playing:
+            try:
+                self.printinfo(self.info)
+                self.lastfm(self.info)
+            finally: 
+                playing.wait()
+
+    def mplay(self, tune):
+        cmd = ['mplayer', '-quiet', '-identify', tune]
+        playing = Popen(cmd , stderr=PIPE, stdout=PIPE, bufsize=1)
+        if not playing:
+            return False
+        k  = ''
+        self.info = { 'TITLE' : '',
+                      'ARTIST' : 'Unknown Artist',
+                      'ALBUM' : 'Unknown Album',
+                      'LENGTH' : '' }
+        # get track info from mplayer
+        while any(select.select([playing.stdout.fileno()], [], [], 2)):
+            x = playing.stdout.readline().split('=')
+            if 'INFO_NAME' in x[0]:
+                k = x[1].strip().upper()
+            elif 'INFO_VALUE' in x[0]:
+                self.info[k] = x[1].strip()
+            elif x[0] == 'ID_LENGTH':
+                self.info['LENGTH'] = str(int(float(x[1].strip())))
+        # fallback to id3
+        if not self.info['TITLE']:
+            for tag in EasyID3(tune).items():
+                self.info[tag[0].upper()] = tag[1][0]
+        if not self.info['LENGTH']:
+            self.info['LENGTH'] = str(int(float(MP3(tune).info.length)))
+        return playing
+
+    def printinfo(self, tags):
+        if self.quiet:
+            return
+        for tag in tags:
+            if tags[tag]:
+                print '%10s: %s' % (tag, tags[tag])
+
+    def lastfm(self, tags):
+        if not self.scrobble:
+            return
+        # ugly :(
+        pss = Popen(['ps', 'auxww'], stdout=PIPE).communicate()[0]
+        if not 'lastfmsubmitd' in pss:
+            print 'lastfmsubmitd running?'
+            return
+        if not tags['TITLE'] or not tags['LENGTH']:
+            print 'not enough info, not scrobbling'
+            return
+        if not self.quiet:
+            print 'scrobbling ...',
+        enc = locale.getpreferredencoding()
+        cli = lastfm.client.Client('lmp')
+        cli.submit({
+            'artist' : lastfm.marshaller.guess_enc(tags['ARTIST'], enc),
+            'album' : lastfm.marshaller.guess_enc(tags['ALBUM'], enc),
+            'title' : lastfm.marshaller.guess_enc(tags['TITLE'], enc),
+            'length' : lastfm.marshaller.parse_length(tags['LENGTH']),
+            'time' : time.gmtime()})
+        if not self.quiet:
+            print 'done.'
+
+def choose(lst):
+    """ pick a thing from a list with readline and stuff """
+    def parse(lst, arg):
+        if arg.isdigit() and int(arg) - 1 in range(len(lst)):
+            return lst[int(arg)-1]
+        return arg
+    def completer(text, state):
+        results = [w for w in lst if w.startswith(text)] + [None]
+        return results[state]
+    readline.set_completer(completer)
+    readline.parse_and_bind('tab: menu-complete')
+    lst.sort(lambda left, right: cmp(left.upper(), right.upper()))
+    if lst:
+        print '\n'.join(['%*d %-20s' % (len(str(len(lst))), n + 1, fn)
+              for n, fn in enumerate(lst)])
+    name = raw_input('> ')
+    if not name:
+        return []
+    return [parse(lst, arg) for arg in name.split()]
+
+if __name__ == '__main__':
+    parser = OptionParser()
+    parser.usage = '%prog [-nq] [tune] or no arguments for interactive mode'
+    parser.add_option('-n', '--noscrobble',
+                      action='store_false',
+                      default=True,
+                      help='no scrobble')
+    parser.add_option('-q', '--quiet',
+                      action='store_true',
+                      default=False,
+                      help='quiet')
+    (opts, args) = parser.parse_args()
+    if args:
+        if os.path.isfile(' .'.join(args)):
+            Player(' '.join(args), opts.quiet, opts.noscrobble)
+    else:
+        while True:
+            # add more filetypes?
+            tune = [t for t in os.listdir('.') if t.endswith('.mp3')
+                                               or t.endswith('.m4a')
+                                               or t.endswith('.flac')]
+            if not tune:
+                print 'nothing to play'
+                break
+            tune = choose(tune)
+            if not tune or not os.path.isfile(' '.join(tune)):
+                print 'exiting'
+                break
+            Player(' '.join(tune), opts.quiet, opts.noscrobble)

@@ -1,0 +1,8 @@
+python cli wrapper for mplayer to submit to lastfm. I wrote this because I often listen to music off an sshfs mount, and mplayer is the most convinient way to listen to a few tunes. give it something to play, or run without arguments to pick mp3's in the current directory.
+
+requires:
+    mplayer
+    lastfmsubmitd
+    python-mutagen
+
+add self to lastfm group to allow the script to submit to lastfmsubmitd
