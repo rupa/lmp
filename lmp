@@ -50,8 +50,11 @@ class Player(object):
                 self.info['LENGTH'] = str(int(float(x[1].strip())))
         # fallback to id3
         if not self.info['TITLE']:
-            for tag in EasyID3(tune).items():
-                self.info[tag[0].upper()] = tag[1][0]
+            try:
+                for tag in EasyID3(tune).items():
+                    self.info[tag[0].upper()] = tag[1][0]
+            except:
+                pass
         if not self.info['LENGTH']:
             self.info['LENGTH'] = str(int(float(MP3(tune).info.length)))
         return playing
@@ -107,9 +110,19 @@ def choose(lst):
         return []
     return [parse(lst, arg) for arg in name.split()]
 
+def filterfiles(lst):
+    ''' only accept these filetypes '''
+    return [i for i in lst if i.endswith('.mp3')
+                           or i.endswith('.m4a')
+                           or i.endswith('.flac')]
+
 if __name__ == '__main__':
     parser = OptionParser()
-    parser.usage = '%prog [-nq] [tune] or no arguments for interactive mode'
+    parser.usage = '%prog [-anq] [tune] or no arguments for interactive mode'
+    parser.add_option('-a', '--playall',
+                      action='store_true',
+                      default=False,
+                      help='play all')
     parser.add_option('-n', '--noscrobble',
                       action='store_false',
                       default=True,
@@ -120,19 +133,21 @@ if __name__ == '__main__':
                       help='quiet')
     (opts, args) = parser.parse_args()
     if args:
-        if os.path.isfile(' .'.join(args)):
-            Player(' '.join(args), opts.quiet, opts.noscrobble)
+        if not os.path.isfile(' .'.join(args)):
+            print 'file not found'
+            sys.exit()
+        Player(' '.join(args), opts.quiet, opts.noscrobble)
     else:
         while True:
-            # add more filetypes?
-            tune = [t for t in os.listdir('.') if t.endswith('.mp3')
-                                               or t.endswith('.m4a')
-                                               or t.endswith('.flac')]
+            tune = filterfiles(os.listdir('.'))
             if not tune:
                 print 'nothing to play'
-                break
-            tune = choose(tune)
-            if not tune or not os.path.isfile(' '.join(tune)):
-                print 'exiting'
-                break
-            Player(' '.join(tune), opts.quiet, opts.noscrobble)
+                sys.exit()
+            elif opts.playall:
+                pass
+            else:
+                tune = ' '.join(choose(tune))
+                if not tune or not os.path.isfile(tune):
+                    print 'exiting'
+                    sys.exit()
+            Player(tune, opts.quiet, opts.noscrobble)
