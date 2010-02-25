@@ -79,7 +79,8 @@ class Player(object):
             return
         if not self.quiet:
             print 'scrobbling ...',
-        enc = locale.getpreferredencoding()
+        #enc = locale.getpreferredencoding()
+        enc = 'utf-8'
         cli = lastfm.client.Client('lmp')
         cli.submit({
             'artist' : lastfm.marshaller.guess_enc(tags['ARTIST'], enc),
@@ -112,9 +113,9 @@ def choose(lst):
 
 def filterfiles(lst):
     ''' only accept these filetypes '''
-    return [i for i in lst if i.endswith('.mp3')
-                           or i.endswith('.m4a')
-                           or i.endswith('.flac')]
+    return [i for i in lst if i.lower().endswith('.mp3')
+                           or i.lower().endswith('.m4a')
+                           or i.lower().endswith('.flac')]
 
 if __name__ == '__main__':
     parser = OptionParser()
