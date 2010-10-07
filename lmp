@@ -26,7 +26,7 @@ class Player(object):
             try:
                 self.printinfo(self.info)
                 self.lastfm(self.info)
-            finally: 
+            finally:
                 playing.wait()
 
     def mplay(self, tune):
@@ -113,9 +113,9 @@ def choose(lst):
 
 def filterfiles(lst):
     ''' only accept these filetypes '''
-    return [i for i in lst if i.lower().endswith('.mp3')
+    return sorted([i for i in lst if i.lower().endswith('.mp3')
                            or i.lower().endswith('.m4a')
-                           or i.lower().endswith('.flac')]
+                           or i.lower().endswith('.flac')])
 
 if __name__ == '__main__':
     parser = OptionParser()
@@ -138,14 +138,19 @@ if __name__ == '__main__':
             print 'file not found'
             sys.exit()
         Player(' '.join(args), opts.quiet, opts.noscrobble)
+    elif opts.playall:
+        for tune in filterfiles(os.listdir('.')):
+            print 'playing %s ...' % tune
+            try:
+                Player(tune, opts.quiet, opts.noscrobble)
+            except:
+                sys.exit()
     else:
         while True:
             tune = filterfiles(os.listdir('.'))
             if not tune:
                 print 'nothing to play'
                 sys.exit()
-            elif opts.playall:
-                pass
             else:
                 tune = ' '.join(choose(tune))
                 if not tune or not os.path.isfile(tune):
